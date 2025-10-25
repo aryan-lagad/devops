@@ -1,0 +1,36 @@
+vim ansible.cfg
+vim hosts
+
+[dev-server]
+ip
+
+[pod-server]
+ip
+
+ssh-keygen
+
+ansible all --list-hosts
+ vim users.yaml
+
+---
+-name: creating users
+ hosts: all
+ tasks: 
+
+ -name: creating users
+  user:
+   name: "{{ item }}"
+   state: present
+  with_items:
+   - arya
+   - anish
+   - Dev
+   - Devops
+   
+-----------
+
+ansible-playbook users.yaml --syntax-check
+ansible-playbook users.yaml -C
+ansible-playbook users.yaml
+
+tail /etc/shadow

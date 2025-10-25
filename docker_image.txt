@@ -1,0 +1,9 @@
+docker save -o my-custom-app.tar my-custom-app:v1.0
+
+zip <zip_filename>.zip <output_filename>.tar
+
+docker image load -i your_image_file.zip
+
+unzip your_application.zip -d /path/to/your/app
+
+ docker build -t my_app_image .
