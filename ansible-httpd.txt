@@ -1,0 +1,20 @@
+---
+- name: Doing some task
+  hosts: all
+  become: true  
+  tasks:
+    - name: Install httpd
+      dnf:
+        name: httpd
+        state: latest
+
+    - name: Start and enable httpd service
+      systemd:
+        name: httpd
+        state: started
+        enabled: true
+
+    - name: Install cifs-utils
+      dnf:
+        name: cifs-utils
+        state: present
