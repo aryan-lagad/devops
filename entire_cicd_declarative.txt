@@ -1,0 +1,86 @@
+pipeline {
+
+    agent any
+
+    tools {
+        maven 'maven' 
+    }
+
+    environment {
+        TOMCAT_USER = 'deployer'
+        TOMCAT_PASS = 'deployer'
+        TOMCAT_HOST = '3.93.186.228' 
+        TOMCAT_PORT = '8080'
+    }
+
+    stages {
+
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main', url: 'https://github.com/aryan-lagad/devops-project.git' 
+            }
+        }
+
+        stage('Build with Maven') {
+            steps {
+                sh 'mvn clean package -Dmaven.test.failure.ignore=true'
+            }
+        }
+
+        stage('Deploy to Tomcat') {
+            steps {
+                sh '''
+                curl -u $TOMCAT_USER:$TOMCAT_PASS \
+                --upload-file webapp/target/webapp.war \
+                "http://$TOMCAT_HOST:$TOMCAT_PORT/manager/text/deploy?path=/sampleapp&amp;update=true"
+                '''
+            }
+        }
+
+        stage('Deploy to Docker Host') {
+            steps {
+                sshPublisher(publishers: [
+                    sshPublisherDesc(
+                        configName: 'docker.com', 
+                        transfers: [
+                            sshTransfer(
+                                sourceFiles: '**/*',
+                                removePrefix: '',
+                                remoteDirectory: 'image',
+                                execCommand: ''' 
+                                cd image
+                                aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/s1r0k0x1
+                                docker build -t pro-repo . 
+                                docker tag pro-repo:latest public.ecr.aws/s1r0k0x1/pro-repo:latest
+                                docker push public.ecr.aws/s1r0k0x1/pro-repo:latest
+                                '''
+                            )
+                        ]
+                    )
+                ])
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: '12345']]) {
+                    sh '''
+                        set -ex
+                        aws eks update-kubeconfig --region us-east-1 --name aryan-cluster
+                        kubectl apply -f /deployment.yaml
+                        kubectl apply -f /service.yaml
+                        kubectl rollout status deployment/regapp-deployment
+                    '''
+                }
+            }
+        }
+
+    }
+
+    post {
+        success {
+            junit '**/target/surefire-reports/TEST-*.xml'
+            archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
+        }
+    }
+}
