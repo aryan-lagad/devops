@@ -1,0 +1,69 @@
+pipeline {
+    agent any
+    tools {
+        maven 'mvn' // Ensure this is configured in Jenkins Global Tool Configuration <- Change This
+    }
+ 
+    environment {
+        TOMCAT_USER = 'deployer'
+        TOMCAT_PASS = 'deployer'
+        TOMCAT_HOST = '3.236.197.213' 
+        TOMCAT_PORT = '8080'
+    }
+ 
+    stages {
+        stage('Clone Repository') {
+            steps {
+                git branch: 'main', url: 'https://github.com/dev-debaprasad/devops-project-final.git'
+            }
+        }
+ 
+        stage('Build with Maven') {
+            steps {
+                sh 'mvn clean package -Dmaven.test.failure.ignore=true'
+            }
+        }
+ 
+        stage('Deploy to Tomcat') {
+            steps {
+                sh '''
+                    curl -u $TOMCAT_USER:$TOMCAT_PASS \
+                    --upload-file webapp/target/webapp.war \
+                    "http://$TOMCAT_HOST:$TOMCAT_PORT/manager/text/deploy?path=/sampleapp&update=true"
+                '''
+            }
+        }
+ 
+        stage('Deploy to Docker Host') {
+            steps {
+                sshPublisher(publishers: [
+                    sshPublisherDesc(
+                        configName: 'docker', // Must match SSH config name in Jenkins
+                        transfers: [
+                            sshTransfer(
+                                sourceFiles: '**/*',
+                                removePrefix: '',
+                                remoteDirectory: 'lti',
+                                execCommand: '''  
+                                    cd lti
+                                    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 916756161674.dkr.ecr.us-east-1.amazonaws.com
+                                    docker build -t my-ecr-proj .
+                                    docker tag my-ecr-proj:latest 916756161674.dkr.ecr.us-east-1.amazonaws.com/my-ecr-proj:latest
+                                    docker push 916756161674.dkr.ecr.us-east-1.amazonaws.com/my-ecr-proj:latest
+ 
+                                '''
+                            )
+                        ]
+                    )
+                ])
+            }
+        }
+    }
+ 
+    post {
+        success {
+            junit '**/target/surefire-reports/TEST-*.xml'
+            archiveArtifacts artifacts: '**/target/*.war', fingerprint: true
+        }
+    }
+}
