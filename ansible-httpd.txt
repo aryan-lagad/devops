@@ -17,4 +17,9 @@
     - name: Install cifs-utils
       dnf:
         name: cifs-utils
+
         state: present
+
+
+------------------------------------
+ansible all -m copy -a 'src=/etc/fstab dest=/tmp/fstab'
